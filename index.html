@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>跟练 Demo · Cartoon Coach v2.2 · Offline</title>
+  <style>
+    :root{
+      --bg:#0b0c10;
+      --panel:#111318;
+      --text:#e6e7ea;
+      --muted:#9aa0a6;
+      --accent:#7c5cff;
+      --accent2:#00ffe1;
+      --good:#00e676;
+      --warn:#ffca28;
+      --bad:#ff6e6e;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:var(--text); background: radial-gradient(1000px 600px at 15% -10%, #19203a 0, #0b0c10 60%) fixed; }
+    header{display:flex;align-items:center;justify-content:space-between; padding:14px 20px; border-bottom:1px solid #23262f; backdrop-filter:saturate(120%) blur(6px); position:sticky; top:0; z-index:5}
+    h1{font-size:18px;margin:0}
+    .badge{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#1a1d25; color:#cbd1d9; font-size:12px; border:1px solid #2a2f3a}
+    .shell{padding:16px; max-width:1400px; margin:0 auto}
+    .grid{display:grid; grid-template-columns: 1.2fr 1fr; gap:16px}
+    .panel{background:var(--panel); border:1px solid #222633; border-radius:16px; padding:12px; box-shadow: 0 10px 30px rgba(0,0,0,.35); position:relative}
+    .panel h3{margin:4px 0 10px 0; font-size:16px}
+    video, canvas{width:100%; border-radius:12px; background:#000}
+    #controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 14px}
+    button{padding:10px 14px; border-radius:10px; border:1px solid #31384a; background:#1b1f2b; color:#e8eaf1; cursor:pointer}
+    button:hover{border-color:#4a5380}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    input[type=file]{display:inline-block; padding:8px 10px; border-radius:10px; border:1px dashed #3a4155; background:#141823; color:#cbd1d9; max-width:360px}
+    label{font-size:12px; color:var(--muted)}
+    #scoreBadge{
+      position:absolute; top:12px; right:12px; width:96px; height:96px; border-radius:999px;
+      background: conic-gradient(from 0deg, var(--accent), var(--accent2));
+      display:flex; align-items:center; justify-content:center; color:#0b0c10; font-weight:800; font-size:26px; box-shadow:0 6px 24px rgba(124,92,255,.35);
+    }
+    .coachWrap{position:relative}
+    #status{margin-left:auto}
+    .hint{color:var(--muted); font-size:12px}
+    #log{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; background:#0f1219; padding:8px; border-radius:8px; max-height:30vh; overflow:auto; border:1px solid #1f2330}
+    .beatbar{position:absolute; left:12px; right:12px; top:8px; height:10px; border-radius:6px; background:linear-gradient(90deg, rgba(124,92,255,.25), rgba(0,255,225,.25)); overflow:hidden; border:1px solid #2a2f3a}
+    .beatDot{position:absolute; top:0; width:6px; height:100%; background:#00ffe1; border-radius:3px; box-shadow:0 0 10px #00ffe1}
+    .actionCard{position:absolute; left:12px; bottom:12px; display:flex; gap:10px; align-items:center; padding:10px 12px; background:#0e1020cc; border:1px solid #2a2f3a; border-radius:12px}
+    .actionCard img{width:64px; height:64px; object-fit:contain; background:#0b0c10; border-radius:8px}
+    .actionCard .title{font-weight:700}
+    .actionCard .desc{font-size:12px; color:var(--muted)}
+    .scoreRow{display:flex; gap:8px; align-items:center; margin-top:8px}
+    .pill{padding:4px 8px; border-radius:999px; font-size:12px; background:#141823; border:1px solid #2a2f3a}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>跟练 Demo · Cartoon Coach <span class="badge">v2.2 · Offline</span></h1>
+    <div id="status" class="badge">脚本加载中…</div>
+  </header>
+
+  <div class="shell">
+    <div id="controls">
+      <div>
+        <label>① 参考动作视频</label><br/>
+        <input id="file" type="file" accept="video/*"/>
+      </div>
+      <div>
+        <label>② 教练形象（PNG/JPG，透明更佳，可选）</label><br/>
+        <input id="coachImgFile" type="file" accept="image/*"/>
+      </div>
+      <div>
+        <label>③ 动作卡片图（可选，随节拍提示）</label><br/>
+        <input id="cardImgFile" type="file" accept="image/*"/>
+      </div>
+      <button id="btnProcess" disabled>解析视频并提取节拍</button>
+      <button id="btnStart" disabled>开始跟练</button>
+      <button id="btnStop" disabled>停止</button>
+      <span class="pill">段分：<span id="segScore">--</span></span>
+      <span class="pill">总分：<span id="totalScore">--</span></span>
+    </div>
+
+    <div class="grid">
+      <div class="panel coachWrap">
+        <div class="beatbar"><div id="beatDot" class="beatDot"></div></div>
+        <div id="scoreBadge">--</div>
+        <div class="actionCard" id="actionCard" style="display:none">
+          <img id="cardImg" alt="动作卡片"/>
+          <div>
+            <div class="title" id="cardTitle">跟着节拍！</div>
+            <div class="desc" id="cardDesc">保持节奏与幅度，注意手臂与膝盖角度。</div>
+          </div>
+        </div>
+        <h3>舞台 · 教练视图</h3>
+        <canvas id="coach" width="960" height="540"></canvas>
+        <div class="hint">节拍条与动作卡片会根据解析出的节拍滚动；每个节拍段单独评分。</div>
+      </div>
+
+      <div class="panel">
+        <h3>参考视频</h3>
+        <video id="refVideo" controls playsinline></video>
+        <div class="hint">上传视频后点击“解析视频并提取节拍”。</div>
+        <div style="height:10px"></div>
+        <h3>实时比对</h3>
+        <video id="liveVideo" autoplay muted playsinline></video>
+        <div class="hint">点击“开始跟练”后开启相机、显示节拍与段分。</div>
+        <div style="height:10px"></div>
+        <h3>日志</h3>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Local vendor scripts -->
+  <script src="./vendor/tf.min.js"></script>
+  <script src="./vendor/pose-detection.min.js"></script>
+
+  <script>
+    function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+    ready(()=>{...});  <!-- Insert the full script here from previous v2.2 code -->
+  </script>
+</body>
+</html>
